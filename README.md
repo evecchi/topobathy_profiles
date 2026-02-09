@@ -2,9 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/evecchi/topobathy_profiles)](https://github.com/evecchi/topobathy_profiles/releases)
-[![Download Plugin](https://img.shields.io/badge/Install%20on-QGIS-brightgreen)](https://github.com/evecchi/topobathy_profiles/archive/refs/heads/main.zip)
+[![Download Plugin](https://img.shields.io/badge/Install%20on-QGIS-brightgreen)](https://github.com/evecchi/topobathy_profiles/releases/download/v0.1.0/topobathy_profiles.zip)
 [![Issues](https://img.shields.io/github/issues/evecchi/topobathy_profiles)](https://github.com/evecchi/topobathy_profiles/issues)
-
 
 **TopoBathy Profiles** is a QGIS plugin for creating topo-bathymetric profiles from point layers along selected cross-section lines. The plugin allows you to preview, customize, and export profiles as graphs and CSV files.
 
@@ -63,10 +62,6 @@ This plugin is licensed under the MIT License. See the `LICENSE` file for detail
 ---
 
 ## Author
-Enrica Vecchi  
-Email: enrica.vecchi@unica.it  
-GitHub: [https://github.com/evecchi/topobathy_profiles](https://github.com/evecchi/topobathy_profiles)
-
 Enrica Vecchi  
 Email: enrica.vecchi@unica.it  
 GitHub: [https://github.com/evecchi/topobathy_profiles](https://github.com/evecchi/topobathy_profiles)
