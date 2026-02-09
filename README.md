@@ -44,7 +44,7 @@
 7. Export the profiles using **Save image** or **Save CSV**.
 
 ### Plugin interface
-![Plugin Interface](screenshots/interface.png)
+<img src="screenshots/interface.png" width="400">
 
 ---
 
