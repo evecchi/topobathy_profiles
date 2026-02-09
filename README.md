@@ -31,6 +31,8 @@
 4. Go to **Plugins → Manage and Install Plugins**.
 5. Enable **TopoBathy Profiles**.
 
+[![Install on QGIS](https://img.shields.io/badge/Install%20on-QGIS-brightgreen)](https://github.com/evecchi/topobathy_profiles/archive/refs/heads/main.zip)
+
 ---
 
 ## Usage
