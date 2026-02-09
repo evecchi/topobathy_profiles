@@ -7,9 +7,9 @@ version=1.0
 author=Enrica Vecchi
 email=enrica.vecchi@unica.it
 about=Analysis of multi-temporal topographic and bathymetric profiles
-tracker=https://github.com/tuonome/topobathy_profiles/issues
-repository=https://github.com/tuonome/topobathy_profiles
-homepage=https://github.com/tuonome/topobathy_profiles
+tracker=https://github.com/evecchi/topobathy_profiles/issues
+repository=https://github.com/evecchi/topobathy_profiles/
+homepage=https://github.com/evecchi/topobathy_profiles/
 icon=icon.png
 experimental=True
 deprecated=False
@@ -17,3 +17,4 @@ hasProcessingProvider=no
 tags=topography, bathymetry, erosion, coastal monitoring, profiles, cross-section, analysis
 category=Analysis
 server=False
+
