@@ -10,7 +10,6 @@
 
 
 ## Features
-
 - Add multiple point layers and assign labels and colors.
 - Select a line layer to define cross sections.
 - Filter points that are too close to each other.
@@ -21,27 +20,21 @@
 ---
 
 ## Installation
-
 1. Download or clone this repository.
 2. Copy the `topobathy_profiles` folder into your QGIS plugin directory:
-
    - **Windows:**  
      `C:\Users\<YourUsername>\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\`
    - **Linux:**  
      `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/`
    - **macOS:**  
      `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/`
-
 3. Open QGIS.
 4. Go to **Plugins → Manage and Install Plugins**.
 5. Enable **TopoBathy Profiles**.
 
-[![Install on QGIS](https://img.shields.io/badge/Install%20on-QGIS-brightgreen)](https://github.com/evecchi/topobathy_profiles/archive/refs/heads/main.zip)
-
 ---
 
 ## Usage
-
 1. Add your point layers using the **Add** button.
 2. Assign labels and colors in the table.
 3. Select a cross-section line layer and choose a feature.
@@ -50,10 +43,12 @@
 6. Preview the profiles in the preview window.
 7. Export the profiles using **Save image** or **Save CSV**.
 
+### Plugin interface
+![Plugin Interface](screenshots/interface.png)
+
 ---
 
 ## Requirements
-
 - QGIS 3.22 or higher
 - Python 3
 - PyQt5 (included with QGIS)
@@ -63,21 +58,14 @@
 ---
 
 ## License
-
 This plugin is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
 ## Author
-
 Enrica Vecchi  
 Email: enrica.vecchi@unica.it  
 GitHub: [https://github.com/evecchi/topobathy_profiles](https://github.com/evecchi/topobathy_profiles)
-
-
----
-
-## Author
 
 Enrica Vecchi  
 Email: enrica.vecchi@unica.it  
