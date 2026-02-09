@@ -1,0 +1,19 @@
+[general]
+id=topobathy_profiles
+name=TopoBathy Profiles
+qgisMinimumVersion=3.22
+description=Create topo-bathymetric profiles from point layers along selected cross sections. Export graphs and CSV.
+version=1.0
+author=Enrica Vecchi
+email=enrica.vecchi@unica.it
+about=Analysis of multi-temporal topographic and bathymetric profiles
+tracker=https://github.com/tuonome/topobathy_profiles/issues
+repository=https://github.com/tuonome/topobathy_profiles
+homepage=https://github.com/tuonome/topobathy_profiles
+icon=icon.png
+experimental=True
+deprecated=False
+hasProcessingProvider=no
+tags=topography, bathymetry, erosion, coastal monitoring, profiles, cross-section, analysis
+category=Analysis
+server=False

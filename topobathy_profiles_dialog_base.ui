@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TopoBathyProfilesDialogBase</class>
+ <widget class="QDialog" name="TopoBathyProfilesDialogBase">
+  <property name="windowTitle">
+   <string>TopoBathy Profiles</string>
+  </property>
+
+  <layout class="QVBoxLayout">
+
+   <item>
+    <widget class="QGroupBox" name="groupInput">
+     <property name="title">
+      <string>Input</string>
+     </property>
+     <layout class="QVBoxLayout">
+
+      <!-- Point layer -->
+      <item>
+       <layout class="QHBoxLayout">
+        <item><widget class="QComboBox" name="comboPunti"/></item>
+        <item><widget class="QPushButton" name="btnAddLayer"><property name="text"><string>Add</string></property></widget></item>
+        <item><widget class="QPushButton" name="btnRemoveLayer"><property name="text"><string>Remove</string></property></widget></item>
+       </layout>
+      </item>
+
+      <!-- Table label/color -->
+      <item><widget class="QTableWidget" name="tableLayerAnno"/></item>
+
+      <!-- Section layer -->
+      <item><widget class="QComboBox" name="comboSectionLayer"/></item>
+
+      <!-- Feature to select before Run -->
+      <item>
+       <layout class="QHBoxLayout">
+        <item><widget class="QLabel"><property name="text"><string>Feature ID:</string></property></widget></item>
+        <item><widget class="QComboBox" name="comboFeatureSelezionata"/></item>
+       </layout>
+      </item>
+
+      <!-- Main buttons -->
+      <item>
+       <layout class="QHBoxLayout">
+        <item><widget class="QPushButton" name="btnRun"><property name="text"><string>Run</string></property></widget></item>
+        <item><widget class="QPushButton" name="btnPreview"><property name="text"><string>Preview</string></property></widget></item>
+        <item><widget class="QPushButton" name="btnSaveGraph"><property name="text"><string>Save image</string></property></widget></item>
+        <item><widget class="QPushButton" name="btnSaveCSV"><property name="text"><string>Save CSV</string></property></widget></item>
+       </layout>
+      </item>
+
+      <!-- AXIS LIMITS -->
+      <item>
+       <layout class="QGridLayout">
+        <item row="0" column="0"><widget class="QLabel"><property name="text"><string>X min</string></property></widget></item>
+        <item row="0" column="1"><widget class="QDoubleSpinBox" name="spinXMin"/></item>
+        <item row="0" column="2"><widget class="QLabel"><property name="text"><string>X max</string></property></widget></item>
+        <item row="0" column="3"><widget class="QDoubleSpinBox" name="spinXMax"/></item>
+
+        <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Y min</string></property></widget></item>
+        <item row="1" column="1"><widget class="QDoubleSpinBox" name="spinYMin"/></item>
+        <item row="1" column="2"><widget class="QLabel"><property name="text"><string>Y max</string></property></widget></item>
+        <item row="1" column="3"><widget class="QDoubleSpinBox" name="spinYMax"/></item>
+       </layout>
+      </item>
+
+      <!-- OPTIONS -->
+      <item>
+       <layout class="QHBoxLayout">
+        <item><widget class="QCheckBox" name="chkSplitLine"><property name="text"><string>Split line</string></property></widget></item>
+        <item><widget class="QDoubleSpinBox" name="spinSplitDistance"/></item>
+       </layout>
+      </item>
+
+      <item>
+       <layout class="QHBoxLayout">
+        <item><widget class="QCheckBox" name="chkFiltraPunti"><property name="text"><string>Filter nearby points</string></property></widget></item>
+        <item><widget class="QDoubleSpinBox" name="spinDistanzaMinPlot"><property name="value"><double>5</double></property></widget></item>
+        <item><widget class="QLabel"><property name="text"><string>m</string></property></widget></item>
+       </layout>
+      </item>
+
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Preview -->
+   <item>
+    <widget class="QGroupBox" name="groupPreview">
+     <property name="title"><string>Preview</string></property>
+     <layout class="QVBoxLayout">
+      <item><widget class="QComboBox" name="comboPreview"/></item>
+      <item>
+       <widget class="QWidget" name="layoutPreview">
+        <layout class="QVBoxLayout"/>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+</ui>
