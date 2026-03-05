@@ -1,275 +1,455 @@
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
+
 from qgis.PyQt import uic
 from qgis.PyQt.QtWidgets import (
-    QDialog, QFileDialog, QMessageBox, QTableWidgetItem, QColorDialog
+    QDialog, QFileDialog, QMessageBox,
+    QTableWidgetItem, QComboBox, QColorDialog,
+    QProgressBar
 )
 from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtCore import Qt
+
 from qgis.gui import QgsMapLayerComboBox
-from qgis.core import QgsProject, QgsMapLayerProxyModel
+from qgis.core import (
+    QgsProject,
+    QgsMapLayerProxyModel,
+    QgsVectorLayer,
+    QgsWkbTypes
+)
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from .topobathy_profiles_functions import estrai_punti_per_sezione_plugin
+from .topobathy_profiles_functions import extract_points_along_section
+
 
 FORM_CLASS, _ = uic.loadUiType(
-    os.path.join(os.path.dirname(__file__), 'topobathy_profiles_dialog_base.ui')
+    os.path.join(os.path.dirname(__file__),
+                 'topobathy_profiles_dialog_base.ui')
 )
+
 
 class TopoBathyProfilesDialog(QDialog, FORM_CLASS):
 
     def __init__(self, iface, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-
-        self.setWindowTitle("TopoBathy Profiles")
         self.iface = iface
 
-        # Axis limits
-        for spin in (self.spinXMin, self.spinYMin):
-            spin.setMinimum(-1e12)
-        for spin in (self.spinXMax, self.spinYMax):
-            spin.setMaximum(1e12)
-
-        # Section layer combo
+        # ---------------- SECTION LAYER FILTER ----------------
         self.sectionLayerCombo = QgsMapLayerComboBox(self)
         self.sectionLayerCombo.setFilters(QgsMapLayerProxyModel.LineLayer)
+
         self.groupInput.layout().replaceWidget(
-            self.comboSectionLayer, self.sectionLayerCombo
+            self.comboSectionLayer,
+            self.sectionLayerCombo
         )
+
         self.comboSectionLayer.deleteLater()
         self.comboSectionLayer = self.sectionLayerCombo
 
-        self.punti_layers = []
-        self.risultati = []
+        # ---------------- INTERNAL STATE ----------------
+        self.point_layers = []
+        self.results = []
+        self.buffer_distance = 4.0
 
-        # Matplotlib canvas
-        self.fig = Figure(figsize=(6, 4))
-        self.canvas = FigureCanvas(self.fig)
-        self.layoutPreview.layout().addWidget(self.canvas)
+        # ---------------- MATPLOTLIB ----------------
+        self.figure = Figure(figsize=(6, 4))
+        self.canvas = FigureCanvas(self.figure)
+        self.layoutPreview.addWidget(self.canvas)
 
-        # Signals
-        self.btnAddLayer.clicked.connect(self.aggiungiLayer)
-        self.btnRemoveLayer.clicked.connect(self.rimuoviLayer)
-        self.btnRun.clicked.connect(self.eseguiAnalisi)
-        self.btnPreview.clicked.connect(self.aggiornaPreview)
-        self.btnSaveGraph.clicked.connect(self.salvaGrafico)
-        self.btnSaveCSV.clicked.connect(self.salvaCSV)
-        self.tableLayerAnno.cellDoubleClicked.connect(self.scegliColore)
-        self.sectionLayerCombo.currentIndexChanged.connect(self.aggiornaFeatureCombo)
+        # ---------------- PROGRESS BAR ----------------
+        self.progressBar = QProgressBar()
+        self.progressBar.setVisible(False)
+        self.layout().addWidget(self.progressBar)
 
-        self._reset_completo()
+        # ---------------- REMOVE LIMITS X/Y ----------------
+        for spin in [
+            self.spinXMin,
+            self.spinXMax,
+            self.spinYMin,
+            self.spinYMax
+        ]:
+            spin.setMinimum(-1e15)
+            spin.setMaximum(1e15)
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._reset_completo()
-        self.aggiornaComboPunti()
-        self.aggiornaFeatureCombo()
-
-    def _reset_completo(self):
-        """Reset completo dei dati e della UI"""
-        self.punti_layers = []
-        self.risultati = []
-
-        # Table
-        self.tableLayerAnno.setRowCount(0)
-        self.tableLayerAnno.setColumnCount(3)
-        self.tableLayerAnno.setHorizontalHeaderLabels(
-            ["Point layer", "Label", "Color"]
+        # ---------------- ENABLE MAX DISTANCE SPIN ----------------
+        self.spinMaxSegmentLength.setEnabled(
+            self.chkSplitProfile.isChecked()
         )
 
-        # Combos
-        self.comboPreview.clear()
-        self.comboFeatureSelezionata.clear()
+        self.chkSplitProfile.stateChanged.connect(
+            lambda state: self.spinMaxSegmentLength.setEnabled(state == Qt.Checked)
+        )
 
-        # Axis spinboxes
-        for spin in (self.spinXMin, self.spinXMax, self.spinYMin, self.spinYMax,
-                     self.spinSplitDistance, self.spinDistanzaMinPlot):
-            spin.blockSignals(True)
-            if spin == self.spinDistanzaMinPlot:
-                spin.setValue(5)
-            else:
-                spin.setValue(0)
-            spin.blockSignals(False)
+        # ---------------- SIGNALS ----------------
+        self.btnAddLayer.clicked.connect(self.addPointLayer)
+        self.btnRemoveLayer.clicked.connect(self.removePointLayer)
+        self.btnRun.clicked.connect(self.runAnalysis)
+        self.btnPreview.clicked.connect(self.updatePreview)
+        self.btnSaveGraph.clicked.connect(self.exportPNG)
+        self.btnSaveCSV.clicked.connect(self.exportCSV)
+        self.btnSetBuffer.clicked.connect(self.setBufferDistance)
 
-        # Checkboxes
-        self.chkSplitLine.setChecked(False)
-        self.chkFiltraPunti.setChecked(False)
+        self.comboSectionLayer.layerChanged.connect(self.populateSectionFields)
+        self.comboSectionIdField.currentIndexChanged.connect(self.populateSectionFeatures)
+        self.comboSectionFeature.currentIndexChanged.connect(self.highlightSelectedFeature)
 
-        # Clear plot
-        self.fig.clear()
-        self.canvas.draw()
+        self.tableLayerAnno.cellDoubleClicked.connect(self.handleColorChange)
 
-    def aggiornaComboPunti(self):
+        self.chkFilterPoints.stateChanged.connect(
+            lambda state: self.spinFilterDistance.setEnabled(state == Qt.Checked)
+        )
+
+        self.populatePointLayerCombo()
+
+    # ----------------------------------------------------------
+    # POPULATE POINT LAYERS
+    # ----------------------------------------------------------
+    def populatePointLayerCombo(self):
         self.comboPunti.clear()
-        for lyr in QgsProject.instance().mapLayers().values():
-            if lyr.geometryType() == 0:  # Point layer
-                self.comboPunti.addItem(lyr.name(), lyr)
+        from qgis.core import QgsWkbTypes
+        for layer in QgsProject.instance().mapLayers().values():
+            if isinstance(layer, QgsVectorLayer) and layer.isValid():
+                geom_type = QgsWkbTypes.geometryType(layer.wkbType())
+                if geom_type == QgsWkbTypes.PointGeometry:
+                    self.comboPunti.addItem(layer.name(), layer)
 
-    def aggiungiLayer(self):
-        lyr = self.comboPunti.currentData()
-        if not lyr or lyr in self.punti_layers:
+    # ----------------------------------------------------------
+    # SECTION FIELD
+    # ----------------------------------------------------------
+    def populateSectionFields(self):
+        self.comboSectionIdField.clear()
+        layer = self.comboSectionLayer.currentLayer()
+        if not layer:
             return
-        self.punti_layers.append(lyr)
+
+        for f in layer.fields():
+            if f.typeName() in ("String", "Integer"):
+                self.comboSectionIdField.addItem(f.name())
+
+    # ----------------------------------------------------------
+    # SECTION FEATURES
+    # ----------------------------------------------------------
+    def populateSectionFeatures(self):
+        self.comboSectionFeature.clear()
+        layer = self.comboSectionLayer.currentLayer()
+        field_name = self.comboSectionIdField.currentText()
+
+        if not layer or not field_name:
+            return
+
+        for feat in layer.getFeatures():
+            self.comboSectionFeature.addItem(
+                str(feat[field_name]),
+                feat.id()
+            )
+
+    def highlightSelectedFeature(self):
+        layer = self.comboSectionLayer.currentLayer()
+        if not layer:
+            return
+
+        fid = self.comboSectionFeature.currentData()
+        if fid is not None:
+            layer.selectByIds([fid])
+            self.iface.mapCanvas().zoomToSelected(layer)
+            self.iface.mapCanvas().refresh()
+
+    # ----------------------------------------------------------
+    # ADD / REMOVE POINT LAYER
+    # ----------------------------------------------------------
+    def addPointLayer(self):
+        layer = self.comboPunti.currentData()
+        if not layer or layer in self.point_layers:
+            return
+
+        self.point_layers.append(layer)
+
         row = self.tableLayerAnno.rowCount()
         self.tableLayerAnno.insertRow(row)
-        self.tableLayerAnno.setItem(row, 0, QTableWidgetItem(lyr.name()))
-        self.tableLayerAnno.setItem(row, 1, QTableWidgetItem(""))
 
+        # Layer name
+        self.tableLayerAnno.setItem(row, 0, QTableWidgetItem(layer.name()))
+
+        # Label (editable)
+        self.tableLayerAnno.setItem(row, 1, QTableWidgetItem(layer.name()))
+
+        # Random color
+        color = QColor(
+            np.random.randint(0, 255),
+            np.random.randint(0, 255),
+            np.random.randint(0, 255)
+        )
         color_item = QTableWidgetItem()
-        color = QColor(np.random.randint(0,256),
-                       np.random.randint(0,256),
-                       np.random.randint(0,256))
         color_item.setBackground(color)
         self.tableLayerAnno.setItem(row, 2, color_item)
 
-    def rimuoviLayer(self):
+        # Elevation field dropdown
+        combo = QComboBox()
+
+        combo.addItem("Z geometry", "__Z__")
+
+        from qgis.PyQt.QtCore import QVariant
+
+        for field in layer.fields():
+            if field.type() in (
+                QVariant.Int,
+                QVariant.Double,
+                QVariant.LongLong
+            ):
+                combo.addItem(field.name(), field.name())
+
+        self.tableLayerAnno.setCellWidget(row, 3, combo)
+
+    def removePointLayer(self):
         row = self.tableLayerAnno.currentRow()
         if row >= 0:
-            self.punti_layers.pop(row)
+            self.point_layers.pop(row)
             self.tableLayerAnno.removeRow(row)
 
-    def scegliColore(self, row, col):
-        if col != 2:
+    # ----------------------------------------------------------
+    # COLOR CHANGE
+    # ----------------------------------------------------------
+    def handleColorChange(self, row, column):
+        if column == 2:
+            item = self.tableLayerAnno.item(row, column)
+            current_color = item.background().color()
+            color = QColorDialog.getColor(current_color, self)
+            if color.isValid():
+                item.setBackground(color)
+
+    # ----------------------------------------------------------
+    # BUFFER
+    # ----------------------------------------------------------
+    def setBufferDistance(self):
+        from qgis.PyQt.QtWidgets import QInputDialog
+        value, ok = QInputDialog.getDouble(
+            self,
+            "Buffer Distance",
+            "Buffer distance (m):",
+            self.buffer_distance,
+            0,
+            10000,
+            2
+        )
+        if ok:
+            self.buffer_distance = value
+
+    # ----------------------------------------------------------
+    # RUN ANALYSIS
+    # ----------------------------------------------------------
+    def runAnalysis(self):
+
+        section_layer = self.comboSectionLayer.currentLayer()
+        if not section_layer:
+            QMessageBox.warning(self, "Error", "Select a section layer.")
             return
-        c = self.tableLayerAnno.item(row, col).background().color()
-        new = QColorDialog.getColor(c, self)
-        if new.isValid():
-            self.tableLayerAnno.item(row, col).setBackground(new)
 
-    def aggiornaFeatureCombo(self):
-        self.comboFeatureSelezionata.clear()
-        layer = self.sectionLayerCombo.currentLayer()
-        if not layer:
-            return
-        for f in layer.getFeatures():
-            self.comboFeatureSelezionata.addItem(f"ID {f.id()}", f.id())
-
-    def eseguiAnalisi(self):
-        sez_layer = self.sectionLayerCombo.currentLayer()
-        if not sez_layer or not self.punti_layers:
-            QMessageBox.warning(self,"Error","Invalid layers")
+        if not self.point_layers:
+            QMessageBox.warning(self, "Error", "Add at least one point layer.")
             return
 
-        feat_id = self.comboFeatureSelezionata.currentData()
-        if feat_id is None:
-            QMessageBox.warning(self,"Error","Select a feature")
+        field_name = self.comboSectionIdField.currentText()
+        feature_id = self.comboSectionFeature.currentData()
+
+        if feature_id is None:
+            QMessageBox.warning(self, "Error", "Select a section feature.")
             return
 
-        for r in range(self.tableLayerAnno.rowCount()):
-            if not self.tableLayerAnno.item(r,1).text().strip():
-                QMessageBox.warning(self,"Error","Fill all labels")
-                return
+        elevation_fields = []
+        use_z_flags = []
 
-        self.risultati = estrai_punti_per_sezione_plugin(
-            sez_layer,
-            self.punti_layers,
-            feature_id=feat_id
+        for row in range(self.tableLayerAnno.rowCount()):
+            combo = self.tableLayerAnno.cellWidget(row, 3)
+            value = combo.currentData()
+
+            if value == "__Z__":
+                elevation_fields.append(None)
+                use_z_flags.append(True)
+            else:
+                elevation_fields.append(value)
+                use_z_flags.append(False)
+
+        self.progressBar.setVisible(True)
+        self.progressBar.setMaximum(len(self.point_layers))
+        self.progressBar.setValue(0)
+
+        def update_progress():
+            self.progressBar.setValue(self.progressBar.value() + 1)
+
+        self.results = extract_points_along_section(
+            section_layer=section_layer,
+            point_layers=self.point_layers,
+            elevation_fields=elevation_fields,
+            use_z_geometry_flags=use_z_flags,
+            buffer_distance=self.buffer_distance,
+            min_plot_spacing=self.spinFilterDistance.value()
+            if self.chkFilterPoints.isChecked() else 1.0,
+            section_id_field=field_name,
+            selected_feature_ids=[feature_id],
+            progress_callback=update_progress,
+            split_profile_on_max_distance=self.chkSplitProfile.isChecked(),
+            max_segment_length=self.spinMaxSegmentLength.value()
         )
 
-        self.comboPreview.clear()
-        self.comboPreview.addItem(f"ID {feat_id}",0)
-        self.comboPreview.setCurrentIndex(0)
-        self.aggiornaPreview(automatic=True)
+        self.progressBar.setVisible(False)
 
-    def aggiornaPreview(self, automatic=False):
-        if not self.risultati:
+        if not self.results:
+            QMessageBox.warning(self, "Warning", "No data extracted.")
             return
 
-        dati = self.risultati[0]
+        self.comboPreview.clear()
+        for r in self.results:
+            self.comboPreview.addItem(str(r["id"]))
 
-        self.fig.clear()
-        ax = self.fig.add_subplot(111)
+        self.updatePreview(automatic=True)
 
-        split_enabled = self.chkSplitLine.isChecked()
-        split_dist = self.spinSplitDistance.value()
+    # ----------------------------------------------------------
+    # PREVIEW
+    # ----------------------------------------------------------
+    def updatePreview(self, automatic=False):
 
-        filtra_enabled = self.chkFiltraPunti.isChecked()
-        filtro_dist = self.spinDistanzaMinPlot.value()
+        if not self.results:
+            return
 
-        for riga, nome in enumerate(dati):
-            d = dati[nome]
+        idx = self.comboPreview.currentIndex()
+        if idx < 0:
+            return
 
-            x = np.array(d["x_plot"], dtype=float)
-            y = np.array(d["y_plot"], dtype=float)
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
 
-            # Filter nearby points
-            if filtra_enabled and filtro_dist>0:
-                xf, yf = [], []
-                last_x = None
-                for xi, yi in zip(x, y):
-                    if np.isnan(xi):
-                        xf.append(np.nan)
-                        yf.append(np.nan)
-                        last_x = None
-                        continue
-                    if last_x is None or xi - last_x >= filtro_dist:
-                        xf.append(xi)
-                        yf.append(yi)
-                        last_x = xi
-                x = np.array(xf)
-                y = np.array(yf)
+        data = self.results[idx]["data"]
 
-            # Split line
-            if split_enabled:
-                start=0
-                for i in range(1,len(x)):
-                    if np.isnan(x[i]) or x[i]-x[i-1]>split_dist:
-                        ax.plot(x[start:i], y[start:i],
-                                color=self.tableLayerAnno.item(riga,2).background().color().name(),
-                                label=self.tableLayerAnno.item(riga,1).text() if start==0 else None)
-                        start=i+1
-                ax.plot(x[start:],y[start:],color=self.tableLayerAnno.item(riga,2).background().color().name())
-            else:
-                ax.plot(x,y,label=self.tableLayerAnno.item(riga,1).text(),
-                        color=self.tableLayerAnno.item(riga,2).background().color().name())
+        for row, layer_name in enumerate(data):
+
+            x_plot = data[layer_name]["x_plot"]
+            y_plot = data[layer_name]["y_plot"]
+
+            if not x_plot:
+                continue
+
+            color_item = self.tableLayerAnno.item(row, 2)
+            color = color_item.background().color().name()
+
+            label_item = self.tableLayerAnno.item(row, 1)
+            label = label_item.text()
+
+            ax.plot(x_plot, y_plot, label=label, color=color)
 
         ax.set_xlabel("Distance (m)")
-        ax.set_ylabel("Height (m)")
+        ax.set_ylabel("Elevation (m)")
+
+
+
+        #ax.set_title("Topo-bathymetric profile", fontsize=12, pad=20)
+
+        # Buffer info sotto il titolo
+        #ax.text(
+        #    0.5, 1.08,
+        #    f"Buffer distance: {self.buffer_distance} m",
+        #    transform=ax.transAxes,
+        #    ha='center',
+        #    fontsize=9,
+        #    alpha=0.7
+        #)
+
+        # ---- titolo e buffer fissi ----
+        self.figure.subplots_adjust(top=0.85)  # spazio sufficiente per titolo e buffer
+
+        # titolo al 95% della figura in alto
+        self.figure.text(
+            0.5, 0.95,
+            "Topo-bathymetric profile",
+            ha='center', va='top', fontsize=12, weight='bold'
+        )
+
+        # buffer sotto il titolo, 5% più in basso
+        self.figure.text(
+            0.5, 0.90,
+            f"Buffer distance: {self.buffer_distance} m",
+            ha='center', va='top', fontsize=9, alpha=0.7
+        )
+
+
+
+
+
+        ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend()
-        ax.grid(True)
 
         if automatic:
-            self.canvas.draw()
-            xmin,xmax = ax.get_xlim()
-            ymin,ymax = ax.get_ylim()
-            for s,v in ((self.spinXMin,xmin),(self.spinXMax,xmax),(self.spinYMin,ymin),(self.spinYMax,ymax)):
-                s.setValue(v)
-            return
+            self.spinXMin.setValue(ax.get_xlim()[0])
+            self.spinXMax.setValue(ax.get_xlim()[1])
+            self.spinYMin.setValue(ax.get_ylim()[0])
+            self.spinYMax.setValue(ax.get_ylim()[1])
+        else:
+            ax.set_xlim(self.spinXMin.value(), self.spinXMax.value())
+            ax.set_ylim(self.spinYMin.value(), self.spinYMax.value())
 
-        ax.set_xlim(self.spinXMin.value(), self.spinXMax.value())
-        ax.set_ylim(self.spinYMin.value(), self.spinYMax.value())
         self.canvas.draw()
 
-    def salvaGrafico(self):
-        path,_ = QFileDialog.getSaveFileName(self,"Save image","","PNG (*.png)")
+    # ----------------------------------------------------------
+    # EXPORT
+    # ----------------------------------------------------------
+    def exportPNG(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export PNG", "", "PNG (*.png)")
         if path:
-            self.fig.savefig(path,dpi=300)
+            self.figure.savefig(path, dpi=300)
 
-    def salvaCSV(self):
-        path,_ = QFileDialog.getSaveFileName(self,"Save CSV","","CSV (*.csv)")
+    def exportCSV(self):
+
+        if not self.results:
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Export CSV", "", "CSV (*.csv)")
         if not path:
             return
 
         import csv
-        dati = self.risultati[0]
 
-        with open(path,'w',newline='') as f:
-            w = csv.writer(f)
-            header=[]
-            for r,n in enumerate(dati):
-                label = self.tableLayerAnno.item(r,1).text()
-                header += [f"H_{label}", f"D_{label}"]
-            w.writerow(header)
+        data = self.results[self.comboPreview.currentIndex()]["data"]
 
-            maxlen=max(len(v["x_plot"]) for v in dati.values())
+        export_only_visible = self.chkExportShownOnly.isChecked()
+
+        x_min = float(self.spinXMin.value())
+        x_max = float(self.spinXMax.value())
+        y_min = float(self.spinYMin.value())
+        y_max = float(self.spinYMax.value())
+
+        with open(path, 'w', newline='') as f:
+            writer = csv.writer(f)
+
+            header = []
+            for row, name in enumerate(data):
+                label = self.tableLayerAnno.item(row, 1).text()
+                header += [f"Elevation_{label}", f"Distance_{label}"]
+
+            writer.writerow(header)
+
+            maxlen = max(len(v["x_plot"]) for v in data.values())
+
             for i in range(maxlen):
-                row=[]
-                for n in dati:
-                    xp=dati[n]["x_plot"]
-                    yp=dati[n]["y_plot"]
-                    row+=[f"{yp[i]:.3f}" if i<len(yp) and yp[i] is not None else "",
-                          f"{xp[i]:.3f}" if i<len(xp) and xp[i] is not None else ""]
-                w.writerow(row)
+                row_data = []
+
+                for name in data:
+                    xp = data[name]["x_plot"]
+                    yp = data[name]["y_plot"]
+
+                    if i < len(xp):
+                        x_val = xp[i]
+                        y_val = yp[i]
+
+                        if export_only_visible:
+                            if not (x_min <= x_val <= x_max and y_min <= y_val <= y_max):
+                                row_data += ["", ""]
+                                continue
+
+                        row_data += [y_val, x_val]
+                    else:
+                        row_data += ["", ""]
+
+                writer.writerow(row_data)
